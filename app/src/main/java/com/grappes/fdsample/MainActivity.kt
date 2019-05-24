@@ -21,22 +21,11 @@ class MainActivity : AppCompatActivity() {
             .addLink("http://icons.iconarchive.com/icons/thesquid.ink/free-flat-sample/1024/football-icon.png")
             .addLink("https://gradeup.co/liveData/f/2019/5/weekly-oneliner-8th-to-14th-may-eng-50.pdf")
             .addLink("https://gradeup.co/liveData/f/2019/5/my_custom_font-75.ttf")
+            .setStorage(ReSorcerer.Storage.INTERNAL)
             .buildWithListener(object : ReSorcerer.OnResultInterface {
-                override fun onFailure(error: String) {
+                override fun onComplete(failedList: ArrayList<String>) {
                     image.setImageRes("http://icons.iconarchive.com/icons/thesquid.ink/free-flat-sample/1024/cap-icon.png")
-                    Log.e("OnResultInterface", "onFailure "+error)
                 }
-
-                override fun onPartialSuccess(failedList: ArrayList<String>) {
-                    Log.e("OnResultInterface", "partial_success")
-                }
-
-                override fun onSuccess() {
-                    image.setImageRes("http://icons.iconarchive.com/icons/thesquid.ink/free-flat-sample/1024/cap-icon.png")
-
-                    Log.e("OnResultInterface", "success")
-                }
-
             })
 
 

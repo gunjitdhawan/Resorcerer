@@ -14,13 +14,16 @@ import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import android.R.attr.path
 
 
-class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterface: OnResultInterface?) {
 
-    enum class Error {
-        NO_INTERNET,
-        SERVER_ERROR
+
+class ReSorcerer(context: Context, arrayList: ArrayList<String>, storage: Storage, onResultInterface: OnResultInterface?) {
+
+    enum class Storage {
+        EXTERNAL,
+        INTERNAL
     }
 
     private lateinit var executor: ExecutorService
@@ -33,16 +36,12 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
     var successCount : Int = 0
 
     init {
+        storageType = storage
 
         startDownloadingAsyncronously();
     }
 
     private fun startDownloadingAsyncronously() {
-
-        if(!isConnected(context)) {
-            onResultInterface?.onFailure("No Internet")
-            return
-        }
 
         progressDialog.setMessage("Downloading("+successCount+"/"+arrayList.size+")")
         progressDialog.show()
@@ -58,11 +57,11 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
                 progressDialog.dismiss()
 
                 if(failedList.size == arrayList.size) {
-                    onResultInterface?.onFailure("Check exception")
+                    onResultInterface?.onComplete(failedList)
                 } else if(failedList.size==0) {
-                    onResultInterface?.onSuccess()
+                    onResultInterface?.onComplete()
                 } else {
-                    onResultInterface?.onPartialSuccess(failedList)
+                    onResultInterface?.onComplete(failedList)
                 }
             }
         }
@@ -71,11 +70,13 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
     class Builder {
         private var arrayList : ArrayList<String> = ArrayList<String>()
         private lateinit var context: Context
+        private var storage: Storage = Storage.INTERNAL
         fun setContext(context: Context) = apply { this.context = context }
         fun addLink(link : String)  = apply { this.arrayList.add(link) }
         fun addMultipleLinks(links : ArrayList<String>)  = apply { this.arrayList.addAll(links) }
-        fun build() = ReSorcerer(context, arrayList, null)
-        fun buildWithListener(onResultInterface: OnResultInterface) = ReSorcerer(context, arrayList, onResultInterface)
+        fun setStorage(storage: Storage)  = apply { this.storage = storage }
+        fun build() = ReSorcerer(context, arrayList, storage,null)
+        fun buildWithListener(onResultInterface: OnResultInterface) = ReSorcerer(context, arrayList, storage, onResultInterface)
     }
 
     private fun downloadTestImages(urls: ArrayList<String>?) {
@@ -86,7 +87,6 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
                 urls.forEach { url: String ->
                     launch {
                         downloadFile(url)
-                        //downloadSingleImage(context, url)
                     }
                 }
             }
@@ -108,7 +108,10 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
             val contentLength = conn.contentLength
             val type = conn.contentType
             val stream = DataInputStream(u.openStream())
-            val dest = File(context.getExternalFilesDir(null), getMd5(url))
+            var dest = File(context.getExternalFilesDir(null), getMd5(url))
+            if(storageType==Storage.INTERNAL) {
+                dest = File(context.filesDir, getMd5(url))
+            }
             val buffer = ByteArray(contentLength)
             stream.readFully(buffer)
             stream.close()
@@ -120,11 +123,13 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
 
             incrementDownloadCount();
         } catch (e: FileNotFoundException) {
-            return  // swallow a 404
             failedList.add(url)
+            e.stackTrace
+            return  // swallow a 404
         } catch (e: IOException) {
-            return  // swallow a 404
+            e.printStackTrace()
             failedList.add(url)
+            return  // swallow a 404
         }
 
     }
@@ -136,16 +141,19 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
     }
 
     interface OnResultInterface {
-        fun onSuccess()
-        fun onFailure(error : String)
-        fun onPartialSuccess(failedList : ArrayList<String>)
+        fun onComplete(failedList : ArrayList<String> = ArrayList<String>())
     }
 
     companion object Utils {
 
-        var EXTERNAL_PATH : String? = null
+        internal var LOCAL_PATH : String? = null
+        internal var storageType = Storage.INTERNAL
 
-        fun getLocalPath(context: Context?, serverUrl: String): String? {
+        internal fun getPath(): Storage {
+            return storageType
+        }
+
+        internal fun getLocalPath(context: Context?, serverUrl: String): String? {
 
             var localPath: String? = null
             if (context != null) {
@@ -161,19 +169,24 @@ class ReSorcerer(context: Context, arrayList: ArrayList<String>, onResultInterfa
                     }
                 }
             }
+
             return null
         }
 
         internal fun getExternalPath(context: Context): String? {
-            if (EXTERNAL_PATH == null) {
-                if (context.getExternalFilesDir(null) != null) {
-                    EXTERNAL_PATH = context.getExternalFilesDir(null)!!.absolutePath
+            if (LOCAL_PATH == null) {
+                if (getPath() == Storage.EXTERNAL && context.getExternalFilesDir(null) != null) {
+                    LOCAL_PATH = context.getExternalFilesDir(null)!!.absolutePath
+                }
+                if (getPath() == Storage.INTERNAL && context.filesDir != null) {
+                    LOCAL_PATH = context.filesDir!!.absolutePath
                 }
             }
-            return EXTERNAL_PATH
+
+            return LOCAL_PATH
         }
 
-        fun ordinalIndexOf(str: String, substr: String, n: Int): Int {
+        internal fun ordinalIndexOf(str: String, substr: String, n: Int): Int {
             var n = n
             var pos = str.indexOf(substr)
             while (--n > 0 && pos != -1)

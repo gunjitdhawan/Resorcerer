@@ -11,13 +11,13 @@ fun ImageView.setImageRes(link : String) {
     var localPath = ReSorcerer.getLocalPath(context, link);
 
     if(localPath.isNullOrBlank()) {
+        Log.i("Resorcerer","Fetching from Internet")
         Glide.with(this)
             .load(link)
-            .diskCacheStrategy(DiskCacheStrategy.NONE)
-            .skipMemoryCache(true).into(this)
+            .into(this)
         return
     }
-
+    Log.i("Resorcerer","Fetching from Local Path")
     Glide.with(this).load(localPath)
         .diskCacheStrategy(DiskCacheStrategy.NONE)
         .skipMemoryCache(true).into(this)
